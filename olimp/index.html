@@ -1,0 +1,2678 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Олимпиада по Информатике — Интерактивный Тренажёр</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- React & Babel -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .grid-bg {
+      background-image: radial-gradient(rgba(99, 102, 241, 0.08) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-panel {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .glow-indigo {
+      box-shadow: 0 0 35px -5px rgba(99, 102, 241, 0.25);
+    }
+    .custom-scroll::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.5);
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.4);
+      border-radius: 9999px;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.05); }
+    }
+    .animate-glow {
+      animation: pulseGlow 4s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="grid-bg selection:bg-indigo-500 selection:text-white">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // --- Audio Feedback (Web Audio API Synthesizer) ---
+    const playSound = (type) => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        const now = ctx.currentTime;
+        if (type === 'click') {
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.exponentialRampToValueAtTime(800, now + 0.04);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+          osc.start(now);
+          osc.stop(now + 0.04);
+        } else if (type === 'success') {
+          osc.frequency.setValueAtTime(523.25, now); // C5
+          osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+          osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        } else if (type === 'error') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.setValueAtTime(160, now + 0.1);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        }
+      } catch (e) {
+        // AudioContext might be blocked until user interaction
+      }
+    };
+
+    // --- SECTIONS CONFIGURATION ---
+    const SECTIONS = [
+      {
+        id: 0,
+        num: 1,
+        title: "Алгоритм шагов (3x + 1)",
+        titleTj: "Алгоритми қадамҳо (3x + 1)",
+        icon: "zap",
+        badge: "Коллатц",
+        desc: "Четное число делим на 2, нечетное умножаем на 3 и прибавляем 1."
+      },
+      {
+        id: 1,
+        num: 2,
+        title: "Системы счисления",
+        titleTj: "Системаҳои ҳисоб",
+        icon: "binary",
+        badge: "2, 8, 10, 16",
+        desc: "Перевод между двоичной, восьмеричной, десятичной и шестнадцатеричной системами."
+      },
+      {
+        id: 2,
+        num: 3,
+        title: "Объем текста и графики",
+        titleTj: "Ҳаҷми матн ва тасвир",
+        icon: "hard-drive",
+        badge: "I = K·i / V = X·Y·i",
+        desc: "Расчет информационного объема текста, растровых изображений и звука."
+      },
+      {
+        id: 3,
+        num: 4,
+        title: "Сети и Графы",
+        titleTj: "Шабакаҳо ва графҳо",
+        icon: "network",
+        badge: "N(N-1)/2",
+        desc: "Топологии сетей, расчет числа кабелей, поиск путей в графе."
+      },
+      {
+        id: 4,
+        num: 5,
+        title: "Алгебра логики",
+        titleTj: "Алгебраи мантиқ",
+        icon: "cpu",
+        badge: "AND / OR / NOT / XOR",
+        desc: "Таблицы истинности, логические схемы, упрощение булевых выражений."
+      },
+      {
+        id: 5,
+        num: 6,
+        title: "Бинарный поиск",
+        titleTj: "Ҷустуҷӯи дуӣ",
+        icon: "search",
+        badge: "log₂(N)",
+        desc: "Двоичный поиск в отсортированном массиве, число сравнений."
+      },
+      {
+        id: 6,
+        num: 7,
+        title: "Пузырьковая сортировка",
+        titleTj: "Мураттабсозии ҳубобӣ",
+        icon: "arrow-up-down",
+        badge: "Инверсии / Обмены",
+        desc: "Пошаговый алгоритм, подсчет количества перестановок и инверсий."
+      },
+      {
+        id: 7,
+        num: 8,
+        title: "Рекурсивные функции",
+        titleTj: "Функсияҳои рекурсивӣ",
+        icon: "repeat",
+        badge: "Стек / F(n)",
+        desc: "Вычисление значений рекуррентных соотношений, дерево рекурсии."
+      },
+      {
+        id: 8,
+        num: 9,
+        title: "Комбинаторика паролей",
+        titleTj: "Комбинатсияи рамзҳо",
+        icon: "key",
+        badge: "Nᴸ вариантов",
+        desc: "Мощность алфавита, длина пароля, количество комбинаций."
+      },
+      {
+        id: 9,
+        num: 10,
+        title: "RLE-сжатие данных",
+        titleTj: "Фишурдасозии RLE",
+        icon: "file-archive",
+        badge: "Кодирование серий",
+        desc: "Алгоритм Run-Length Encoding, коэффициент сжатия, подсчет байтов."
+      },
+      {
+        id: 10,
+        num: 11,
+        title: "Блиц-Экзамен (100 баллов)",
+        titleTj: "Имтиҳони Блитс (100 хол)",
+        icon: "award",
+        badge: "Финальный тест",
+        desc: "10 олимпиадных задач из всех разделов на время и результат!"
+      }
+    ];
+
+    // =========================================================================
+    // SECTION 1: Collatz (3x+1) Simulator & Quiz
+    // =========================================================================
+    function CollatzSection({ onSolve }) {
+      const [startVal, setStartVal] = useState(27);
+      const [steps, setSteps] = useState([27]);
+      const [isPlaying, setIsPlaying] = useState(false);
+
+      // Quiz state
+      const [quizQ, setQuizQ] = useState({ start: 13, targetSteps: 4, answer: 10 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const starts = [7, 9, 11, 13, 15, 17, 19, 21, 23, 25];
+        const s = starts[Math.floor(Math.random() * starts.length)];
+        const k = Math.floor(Math.random() * 4) + 3; // 3 to 6 steps
+        let cur = s;
+        for (let i = 0; i < k; i++) {
+          cur = cur % 2 === 0 ? cur / 2 : 3 * cur + 1;
+        }
+        setQuizQ({ start: s, targetSteps: k, answer: cur });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const stepOnce = () => {
+        playSound('click');
+        const last = steps[steps.length - 1];
+        if (last === 1) return;
+        const next = last % 2 === 0 ? last / 2 : 3 * last + 1;
+        setSteps(prev => [...prev, next]);
+      };
+
+      const resetSim = (val = startVal) => {
+        playSound('click');
+        setIsPlaying(false);
+        const num = Math.max(1, parseInt(val) || 1);
+        setSteps([num]);
+      };
+
+      useEffect(() => {
+        let timer;
+        if (isPlaying) {
+          timer = setInterval(() => {
+            setSteps(prev => {
+              const last = prev[prev.length - 1];
+              if (last === 1) {
+                setIsPlaying(false);
+                return prev;
+              }
+              const next = last % 2 === 0 ? last / 2 : 3 * last + 1;
+              return [...prev, next];
+            });
+          }, 300);
+        }
+        return () => clearInterval(timer);
+      }, [isPlaying]);
+
+      const peakVal = useMemo(() => Math.max(...steps), [steps]);
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.answer) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: "Верно! Отличная работа! +10 баллов" });
+          onSolve(0);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.answer}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-indigo-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-indigo-500/20 rounded-lg text-indigo-400">⚡</span>
+              Правило гипотезы Коллатца (Сиракузская последовательность):
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-3 text-sm">
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <span className="text-emerald-400 font-bold block mb-1">1. Если число ЧЁТНОЕ ($x$ mod 2 == 0):</span>
+                <code className="text-indigo-300 font-mono text-base font-bold bg-slate-950 px-2 py-0.5 rounded">x = x / 2</code>
+              </div>
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <span className="text-amber-400 font-bold block mb-1">2. Если число НЕЧЁТНОЕ ($x$ mod 2 == 1):</span>
+                <code className="text-indigo-300 font-mono text-base font-bold bg-slate-950 px-2 py-0.5 rounded">x = 3 · x + 1</code>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-3">
+              💡 На олимпиаде в Таджикистане обычно просят вычислить значение числа ровно через 4, 5 или 6 шагов. Главное — внимательно и аккуратно делить и умножать на черновике.
+            </p>
+          </div>
+
+          {/* Interactive Simulator */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base">Интерактивный симулятор шагов</h4>
+                <p className="text-xs text-slate-400">Наблюдай за изменением числа и пиковыми значениями</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={startVal}
+                  onChange={(e) => {
+                    setStartVal(e.target.value);
+                    resetSim(e.target.value);
+                  }}
+                  className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-center font-mono text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+                <button
+                  onClick={stepOnce}
+                  disabled={steps[steps.length - 1] === 1}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition"
+                >
+                  Шаг ➜
+                </button>
+                <button
+                  onClick={() => { playSound('click'); setIsPlaying(!isPlaying); }}
+                  disabled={steps[steps.length - 1] === 1}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${isPlaying ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white`}
+                >
+                  {isPlaying ? 'Пауза ⏸' : 'Авто 🚀'}
+                </button>
+                <button
+                  onClick={() => resetSim()}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition"
+                >
+                  Сброс
+                </button>
+              </div>
+            </div>
+
+            {/* Simulation Stats */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                <span className="text-xs text-slate-400 block">Текущий шаг</span>
+                <span className="text-xl sm:text-2xl font-bold font-mono text-indigo-400">{steps.length - 1}</span>
+              </div>
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                <span className="text-xs text-slate-400 block">Текущее число</span>
+                <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">{steps[steps.length - 1]}</span>
+              </div>
+              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-center">
+                <span className="text-xs text-slate-400 block">Пик (максимум)</span>
+                <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">{peakVal}</span>
+              </div>
+            </div>
+
+            {/* Sequence Pills */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 max-h-48 overflow-y-auto custom-scroll">
+              <span className="text-xs text-slate-500 block mb-2 font-mono">История вычислений:</span>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {steps.map((n, i) => (
+                  <React.Fragment key={i}>
+                    <span className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition ${
+                      i === steps.length - 1
+                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                        : n % 2 === 0
+                        ? 'bg-slate-800/90 text-emerald-300 border border-emerald-900/40'
+                        : 'bg-slate-800/90 text-amber-300 border border-amber-900/40'
+                    }`}>
+                      <span className="text-[10px] text-slate-400 mr-1">#{i}:</span>
+                      {n}
+                    </span>
+                    {i < steps.length - 1 && (
+                      <span className="text-slate-600 text-xs">→</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-indigo-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-indigo-400">🎯</span> Тренажёр темы (Олимпиадный вопрос)
+                </h4>
+                <p className="text-xs text-slate-400">Реши задачу самостоятельно и проверь себя</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+              >
+                Другой вариант ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Дано начальное число <strong className="text-indigo-300 text-base font-mono">x = {quizQ.start}</strong>.
+                К нему последовательно применили правило Коллатца ровно <strong className="text-amber-300 text-base font-mono">{quizQ.targetSteps}</strong> раз(а).
+                Чему равно получившееся число?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Твой ответ..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-indigo-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-indigo-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 2: Number Systems (Base 2, 8, 10, 16)
+    // =========================================================================
+    function NumberSystemsSection({ onSolve }) {
+      // 8-bit Interactive board
+      const [bits, setBits] = useState([0, 0, 1, 0, 1, 1, 0, 1]); // 45
+      const bitWeights = [128, 64, 32, 16, 8, 4, 2, 1];
+
+      const currentDec = useMemo(() => {
+        return bits.reduce((acc, b, i) => acc + (b ? bitWeights[i] : 0), 0);
+      }, [bits]);
+
+      const toggleBit = (idx) => {
+        playSound('click');
+        setBits(prev => {
+          const next = [...prev];
+          next[idx] = next[idx] === 1 ? 0 : 1;
+          return next;
+        });
+      };
+
+      // Live converter input
+      const [inputVal, setInputVal] = useState("45");
+      const [inputBase, setInputBase] = useState(10);
+
+      const parsedNum = useMemo(() => {
+        try {
+          const n = parseInt(inputVal, inputBase);
+          return isNaN(n) ? 0 : n;
+        } catch {
+          return 0;
+        }
+      }, [inputVal, inputBase]);
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ hex: "2B", answer: 43 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const hexes = [
+          { hex: "1A", ans: 26 },
+          { hex: "2F", ans: 47 },
+          { hex: "3C", ans: 60 },
+          { hex: "7B", ans: 123 },
+          { hex: "A5", ans: 165 },
+          { hex: "FF", ans: 255 },
+          { hex: "105", ans: 261 }
+        ];
+        const q = hexes[Math.floor(Math.random() * hexes.length)];
+        setQuizQ(q);
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Правильно! ${quizQ.hex}₁₆ = ${quizQ.ans}₁₀. +10 баллов` });
+          onSolve(1);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Ошибка. Правильный ответ: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-cyan-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-cyan-500/20 rounded-lg text-cyan-400">🔢</span>
+              Шпаргалка: Быстрый перевод систем счисления
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                <span className="text-cyan-300 font-bold block mb-1">Двоичная система (Монеты-степени):</span>
+                <p className="text-xs text-slate-300 mb-2">Веса разрядов справа налево: <strong>1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024</strong>.</p>
+                <code className="text-emerald-400 font-mono text-xs block bg-slate-950 p-2 rounded">10110₂ = 16 + 4 + 2 = 22₁₀</code>
+              </div>
+              <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                <span className="text-indigo-300 font-bold block mb-1">Шестнадцатеричная (16-ричная):</span>
+                <p className="text-xs text-slate-300 mb-1">Степени: <strong>1, 16, 256, 4096</strong>.</p>
+                <p className="text-xs text-amber-300 font-mono mb-2">A=10, B=11, C=12, D=13, E=14, F=15</p>
+                <code className="text-emerald-400 font-mono text-xs block bg-slate-950 p-2 rounded">2F₁₆ = 2×16 + 15×1 = 32 + 15 = 47₁₀</code>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive 8-Bit Mint */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base">Интерактивный «Монетный двор» двоичной системы</h4>
+                <p className="text-xs text-slate-400">Кликай по битам (0 или 1), чтобы включать или отключать степени двойки</p>
+              </div>
+              <button
+                onClick={() => { playSound('click'); setBits([0,0,0,0,0,0,0,0]); }}
+                className="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
+              >
+                Очистить все биты
+              </button>
+            </div>
+
+            {/* Bit Cards */}
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-4">
+              {bits.map((b, i) => (
+                <button
+                  key={i}
+                  onClick={() => toggleBit(i)}
+                  className={`p-3 rounded-xl border text-center transition transform active:scale-95 ${
+                    b === 1
+                      ? 'bg-cyan-600/30 border-cyan-400 text-cyan-200 shadow-lg shadow-cyan-500/20'
+                      : 'bg-slate-900/80 border-slate-800 text-slate-500 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-[10px] block font-mono text-slate-400 mb-1">2^{7-i}</span>
+                  <span className="text-xs font-bold block mb-1 text-slate-300">+{bitWeights[i]}</span>
+                  <span className={`text-2xl font-black font-mono block ${b === 1 ? 'text-cyan-300' : 'text-slate-600'}`}>
+                    {b}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Live representations */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-center">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Десятичная (10)</span>
+                <span className="text-xl font-bold text-emerald-400">{currentDec}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Двоичная (2)</span>
+                <span className="text-xl font-bold text-cyan-400">{bits.join('')}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Шестнадцатеричная (16)</span>
+                <span className="text-xl font-bold text-indigo-400">{currentDec.toString(16).toUpperCase()}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block">Кол-во единиц (бит)</span>
+                <span className="text-xl font-bold text-amber-400">{bits.filter(x => x === 1).length}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Universal Converter */}
+          <div className="glass-panel p-5 rounded-2xl">
+            <h4 className="font-bold text-white text-sm mb-3">Универсальный мгновенный конвертер</h4>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <span className="text-xs text-slate-400">Ввести число:</span>
+              <input
+                type="text"
+                value={inputVal}
+                onChange={(e) => setInputVal(e.target.value.toUpperCase())}
+                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono text-white text-sm focus:border-cyan-500 focus:outline-none w-36 uppercase"
+              />
+              <span className="text-xs text-slate-400">в системе:</span>
+              <select
+                value={inputBase}
+                onChange={(e) => setInputBase(parseInt(e.target.value))}
+                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-white text-sm focus:border-cyan-500 focus:outline-none"
+              >
+                <option value={10}>Десятичная (10)</option>
+                <option value={2}>Двоичная (2)</option>
+                <option value={16}>Шестнадцатеричная (16)</option>
+                <option value={8}>Восьмеричная (8)</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block mb-0.5">Base 10:</span>
+                <strong className="text-emerald-400 text-sm">{parsedNum}</strong>
+              </div>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block mb-0.5">Base 2:</span>
+                <strong className="text-cyan-400 text-sm break-all">{parsedNum.toString(2)}</strong>
+              </div>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block mb-0.5">Base 16:</span>
+                <strong className="text-indigo-400 text-sm">{parsedNum.toString(16).toUpperCase()}</strong>
+              </div>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+                <span className="text-slate-400 block mb-0.5">Единиц в двоичной:</span>
+                <strong className="text-amber-400 text-sm">{(parsedNum.toString(2).match(/1/g) || []).length}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-cyan-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-cyan-400">🎯</span> Тренажёр: Перевод 16-ричного числа в десятичное
+                </h4>
+                <p className="text-xs text-slate-400">Типовая олимпиадная задача</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-cyan-400 hover:text-cyan-300 underline font-medium"
+              >
+                Другое число ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Переведите шестнадцатеричное число <strong className="text-cyan-300 text-lg font-mono">{quizQ.hex}₁₆</strong> в десятичную систему счисления.
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Десятичный ответ..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-cyan-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-cyan-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 3: Text & Image Information Volume
+    // =========================================================================
+    function VolumeSection({ onSolve }) {
+      // Image Calculator
+      const [width, setWidth] = useState(1920);
+      const [height, setHeight] = useState(1080);
+      const [depth, setDepth] = useState(24); // 24 bits (3 bytes)
+
+      const totalBits = width * height * depth;
+      const totalBytes = totalBits / 8;
+      const totalKB = (totalBytes / 1024).toFixed(2);
+      const totalMB = (totalBytes / (1024 * 1024)).toFixed(2);
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ w: 800, h: 600, colors: 256, bits: 8, answerKB: 468.75 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const presets = [
+          { w: 640, h: 480, bpp: 8, ans: (640*480*1)/1024 }, // 300 KB
+          { w: 1024, h: 768, bpp: 16, ans: (1024*768*2)/1024 }, // 1536 KB
+          { w: 800, h: 600, bpp: 24, ans: (800*600*3)/1024 }, // 1406.25 KB
+          { w: 512, h: 512, bpp: 8, ans: (512*512*1)/1024 }, // 256 KB
+        ];
+        const q = presets[Math.floor(Math.random() * presets.length)];
+        setQuizQ({ w: q.w, h: q.h, bpp: q.bpp, ansKB: q.ans });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        const num = parseFloat(userAns);
+        if (Math.abs(num - quizQ.ansKB) < 0.5) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Точно! Объем: ${quizQ.ansKB} КБайт. +10 баллов!` });
+          onSolve(2);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.ansKB} КБайт.` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-amber-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-amber-500/20 rounded-lg text-amber-400">💾</span>
+              Формулы объема информации
+            </h3>
+            <div className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                <span className="text-amber-300 font-bold block mb-1">1. Текстовый документ:</span>
+                <code className="text-indigo-300 font-mono text-sm block font-bold mb-1">I = K · i</code>
+                <p className="text-xs text-slate-300">$K$ — количество символов. $i$ — вес одного символа (ASCII = 8 бит = 1 байт, Unicode = 16 бит = 2 байта).</p>
+              </div>
+              <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-700/50">
+                <span className="text-emerald-300 font-bold block mb-1">2. Растровое изображение:</span>
+                <code className="text-indigo-300 font-mono text-sm block font-bold mb-1">V = Ширина × Высота × i</code>
+                <p className="text-xs text-slate-300">$i$ — глубина цвета в битах ($2^i = N$ цветов палитры). 1 Байт = 8 бит, 1 Кбайт = 1024 байта, 1 Мбайт = 1024 Кбайта.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Image Calculator */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h4 className="font-bold text-white text-base mb-1">Интерактивный калькулятор растрового изображения</h4>
+            <p className="text-xs text-slate-400 mb-4">Меняй разрешение и палитру для мгновенного расчета</p>
+
+            <div className="grid sm:grid-cols-3 gap-3 mb-4">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Ширина (пиксели):</label>
+                <input
+                  type="number"
+                  value={width}
+                  onChange={(e) => setWidth(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 font-mono text-white text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Высота (пиксели):</label>
+                <input
+                  type="number"
+                  value={height}
+                  onChange={(e) => setHeight(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 font-mono text-white text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Глубина цвета:</label>
+                <select
+                  value={depth}
+                  onChange={(e) => setDepth(parseInt(e.target.value))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
+                >
+                  <option value={1}>1 бит (Ч/Б, 2 цвета)</option>
+                  <option value={4}>4 бита (16 цветов)</option>
+                  <option value={8}>8 бит (256 цветов, 1 байт)</option>
+                  <option value={16}>16 бит (HighColor, 65536 цветов)</option>
+                  <option value={24}>24 бита (TrueColor, 3 байта)</option>
+                  <option value={32}>32 бита (RGBA, 4 байта)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Resolution Presets */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="text-xs text-slate-500 self-center">Пресеты:</span>
+              {[
+                { label: '640×480 (VGA)', w: 640, h: 480 },
+                { label: '800×600 (SVGA)', w: 800, h: 600 },
+                { label: '1280×720 (HD)', w: 1280, h: 720 },
+                { label: '1920×1080 (FullHD)', w: 1920, h: 1080 }
+              ].map((p, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => { playSound('click'); setWidth(p.w); setHeight(p.h); }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Live Formula Result Display */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono">
+              <div className="text-xs text-slate-400 mb-2">
+                Формула: {width} × {height} пикс. × {depth} бит = <strong className="text-white">{totalBits.toLocaleString()} бит</strong>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-800/80">
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Байты</span>
+                  <span className="text-base sm:text-lg font-bold text-emerald-400">{totalBytes.toLocaleString()} Б</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Килобайты (КБ)</span>
+                  <span className="text-base sm:text-lg font-bold text-amber-400">{totalKB} КБ</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase">Мегабайты (МБ)</span>
+                  <span className="text-base sm:text-lg font-bold text-indigo-400">{totalMB} МБ</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-amber-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-amber-400">🎯</span> Тренажёр: Объем графического файла
+                </h4>
+                <p className="text-xs text-slate-400">Рассчитай объем файла в Килобайтах (КБайт)</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-amber-400 hover:text-amber-300 underline font-medium"
+              >
+                Другая задача ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Растровое изображение размером <strong className="text-amber-300 font-mono">{quizQ.w} × {quizQ.h}</strong> пикселей имеет глубину цвета <strong className="text-amber-300 font-mono">{quizQ.bpp} бит</strong> на пиксель.
+                Определите объем файла без сжатия в <strong className="text-white underline">Кбайтах</strong>.
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                step="any"
+                placeholder="Объем в КБайт..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-amber-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-amber-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 4: Networks & Graph Cables
+    // =========================================================================
+    function NetworkSection({ onSolve }) {
+      const [nodeCount, setNodeCount] = useState(6);
+      const [topology, setTopology] = useState("full"); // full, star, ring
+
+      const totalCables = useMemo(() => {
+        if (topology === "full") return (nodeCount * (nodeCount - 1)) / 2;
+        if (topology === "star") return nodeCount - 1;
+        if (topology === "ring") return nodeCount;
+        return 0;
+      }, [nodeCount, topology]);
+
+      // Coordinates on circle for SVG graph
+      const radius = 95;
+      const center = 120;
+      const nodes = useMemo(() => {
+        const arr = [];
+        for (let i = 0; i < nodeCount; i++) {
+          const angle = (2 * Math.PI * i) / nodeCount - Math.PI / 2;
+          arr.push({
+            id: i + 1,
+            x: center + radius * Math.cos(angle),
+            y: center + radius * Math.sin(angle)
+          });
+        }
+        return arr;
+      }, [nodeCount]);
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ n: 14, answer: 91 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const ns = [8, 10, 12, 14, 15, 16, 20, 25];
+        const n = ns[Math.floor(Math.random() * ns.length)];
+        const ans = (n * (n - 1)) / 2;
+        setQuizQ({ n, answer: ans });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.answer) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `В точку! Для ${quizQ.n} компьютеров нужно (${quizQ.n}×${quizQ.n-1})/2 = ${quizQ.answer} кабелей. +10 баллов` });
+          onSolve(3);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.answer}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-violet-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-violet-500/20 rounded-lg text-violet-400">🌐</span>
+              Формулы топологий локальных сетей
+            </h3>
+            <div className="grid sm:grid-cols-3 gap-3 text-sm">
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <span className="text-violet-400 font-bold block mb-1">Полносвязная («Каждый с каждым»):</span>
+                <code className="text-indigo-300 font-mono text-base font-bold bg-slate-950 px-2 py-0.5 rounded block mb-1">
+                  C = N · (N - 1) / 2
+                </code>
+                <p className="text-xs text-slate-400">Каждый узел соединен кабелем со всеми остальными $N-1$ узлами.</p>
+              </div>
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <span className="text-cyan-400 font-bold block mb-1">Топология «Звезда» (Star):</span>
+                <code className="text-cyan-300 font-mono text-base font-bold bg-slate-950 px-2 py-0.5 rounded block mb-1">
+                  C = N - 1
+                </code>
+                <p className="text-xs text-slate-400">Все компьютеры подключаются к одному центральному коммутатору (хабу).</p>
+              </div>
+              <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/50">
+                <span className="text-emerald-400 font-bold block mb-1">Топология «Кольцо» (Ring):</span>
+                <code className="text-emerald-300 font-mono text-base font-bold bg-slate-950 px-2 py-0.5 rounded block mb-1">
+                  C = N
+                </code>
+                <p className="text-xs text-slate-400">Каждый компьютер соединен ровно с двумя соседними по замкнутому кругу.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Graph Visualizer */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base">Интерактивный симулятор сети</h4>
+                <p className="text-xs text-slate-400">Меняй количество узлов и смотри на граф и число кабелей</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {['full', 'star', 'ring'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => { playSound('click'); setTopology(t); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      topology === t ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {t === 'full' ? 'Полносвязная' : t === 'star' ? 'Звезда' : 'Кольцо'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-8 justify-center">
+              {/* SVG Canvas for Network Graph */}
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-center">
+                <svg width="240" height="240" className="overflow-visible">
+                  {/* Cables (Lines) */}
+                  {topology === "full" && nodes.map((n1, i) =>
+                    nodes.slice(i + 1).map((n2, j) => (
+                      <line
+                        key={`${i}-${j}`}
+                        x1={n1.x}
+                        y1={n1.y}
+                        x2={n2.x}
+                        y2={n2.y}
+                        stroke="#6366f1"
+                        strokeWidth="1.5"
+                        strokeOpacity="0.4"
+                      />
+                    ))
+                  )}
+                  {topology === "star" && nodes.slice(1).map((n, i) => (
+                    <line
+                      key={i}
+                      x1={center}
+                      y1={center}
+                      x2={n.x}
+                      y2={n.y}
+                      stroke="#06b6d4"
+                      strokeWidth="2"
+                      strokeOpacity="0.7"
+                    />
+                  ))}
+                  {topology === "ring" && nodes.map((n, i) => {
+                    const next = nodes[(i + 1) % nodes.length];
+                    return (
+                      <line
+                        key={i}
+                        x1={n.x}
+                        y1={n.y}
+                        x2={next.x}
+                        y2={next.y}
+                        stroke="#10b981"
+                        strokeWidth="2"
+                        strokeOpacity="0.8"
+                      />
+                    );
+                  })}
+                  {/* Central Hub for Star */}
+                  {topology === "star" && (
+                    <circle cx={center} cy={center} r="12" fill="#0891b2" stroke="#67e8f9" strokeWidth="2" />
+                  )}
+                  {/* Computer Nodes */}
+                  {nodes.map((n) => (
+                    <g key={n.id}>
+                      <circle
+                        cx={n.x}
+                        cy={n.y}
+                        r="11"
+                        fill="#1e1b4b"
+                        stroke="#818cf8"
+                        strokeWidth="2"
+                      />
+                      <text
+                        x={n.x}
+                        y={n.y + 3.5}
+                        textAnchor="middle"
+                        fill="#e0e7ff"
+                        fontSize="9"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                      >
+                        {n.id}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              </div>
+
+              {/* Controls and formula */}
+              <div className="flex-1 space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>Количество компьютеров (N):</span>
+                    <strong className="text-violet-400 font-mono text-sm">{nodeCount}</strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="3"
+                    max="14"
+                    value={nodeCount}
+                    onChange={(e) => setNodeCount(parseInt(e.target.value))}
+                    className="w-full accent-violet-500 cursor-pointer"
+                  />
+                </div>
+
+                <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs text-slate-400 block mb-1">Итоговое количество кабелей:</span>
+                  <div className="text-3xl font-extrabold font-mono text-violet-400 mb-2">
+                    {totalCables} <span className="text-sm text-slate-400 font-normal">кабелей</span>
+                  </div>
+                  <div className="text-xs text-slate-300 font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+                    {topology === "full" && `(${nodeCount} × ${nodeCount - 1}) / 2 = ${totalCables}`}
+                    {topology === "star" && `${nodeCount} - 1 = ${totalCables} (к центральному хабу)`}
+                    {topology === "ring" && `N = ${totalCables} (по кольцу)`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-violet-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-violet-400">🎯</span> Тренажёр: Кабели для полносвязной сети
+                </h4>
+                <p className="text-xs text-slate-400">Классическая олимпиадная задача</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-violet-400 hover:text-violet-300 underline font-medium"
+              >
+                Другие числа ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                В компьютерном классе установлено <strong className="text-violet-300 text-lg font-mono">{quizQ.n}</strong> компьютеров.
+                Каждый компьютер соединен отдельным кабелем с каждым другим напрямую (полносвязная сеть).
+                Сколько всего кабелей потребовалось проложить?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Число кабелей..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-violet-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-violet-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 5: Boolean Logic & Truth Tables
+    // =========================================================================
+    function LogicSection({ onSolve }) {
+      const [A, setA] = useState(1);
+      const [B, setB] = useState(0);
+      const [C, setC] = useState(1);
+
+      // Calculations
+      const andRes = A && B ? 1 : 0;
+      const orRes = A || B ? 1 : 0;
+      const notARes = !A ? 1 : 0;
+      const xorRes = A ^ B ? 1 : 0;
+      const customExpr = (A && !B) || C ? 1 : 0;
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({
+        expr: "(NOT A AND B) OR (A AND C)",
+        vals: { A: 0, B: 1, C: 1 },
+        ans: 1
+      });
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const tests = [
+          { expr: "(NOT A AND B) OR (A AND C)", vals: { A: 0, B: 1, C: 1 }, ans: 1 },
+          { expr: "(A OR NOT B) AND (NOT C)", vals: { A: 0, B: 1, C: 0 }, ans: 0 },
+          { expr: "NOT(A AND B) AND (C OR A)", vals: { A: 1, B: 1, C: 0 }, ans: 0 },
+          { expr: "(A XOR B) OR (NOT C)", vals: { A: 1, B: 1, C: 1 }, ans: 0 },
+          { expr: "(A AND NOT B) OR (B AND NOT C)", vals: { A: 1, B: 0, C: 0 }, ans: 1 }
+        ];
+        const t = tests[Math.floor(Math.random() * tests.length)];
+        setQuizQ(t);
+        setQuizResult(null);
+      };
+
+      const handleQuizPick = (choice) => {
+        if (choice === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Абсолютно верно! Ответ ${choice}. +10 баллов` });
+          onSolve(4);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Ошибка! Правильный результат: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-emerald-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">⚡</span>
+              Таблица истинности основных логических операций
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                <strong className="text-emerald-400 block mb-1">AND (И / ∧ / ·)</strong>
+                <span>1 AND 1 = 1</span><br/>
+                <span className="text-slate-400">1 AND 0 = 0</span>
+              </div>
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                <strong className="text-cyan-400 block mb-1">OR (ИЛИ / ∨ / +)</strong>
+                <span>0 OR 1 = 1</span><br/>
+                <span className="text-slate-400">0 OR 0 = 0</span>
+              </div>
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                <strong className="text-amber-400 block mb-1">NOT (НЕ / ¬)</strong>
+                <span>NOT 0 = 1</span><br/>
+                <span>NOT 1 = 0</span>
+              </div>
+              <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                <strong className="text-indigo-400 block mb-1">XOR (Искл. ИЛИ)</strong>
+                <span>1 XOR 1 = 0</span><br/>
+                <span>1 XOR 0 = 1</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Logic Gates Circuit */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h4 className="font-bold text-white text-base mb-2">Интерактивный логический щит</h4>
+            <p className="text-xs text-slate-400 mb-4">Переключай тумблеры сигналов A, B, C и смотри на результат</p>
+
+            <div className="flex flex-wrap gap-4 mb-6">
+              {[
+                { name: 'A', val: A, set: setA },
+                { name: 'B', val: B, set: setB },
+                { name: 'C', val: C, set: setC },
+              ].map((sw) => (
+                <button
+                  key={sw.name}
+                  onClick={() => { playSound('click'); sw.set(sw.val === 1 ? 0 : 1); }}
+                  className={`px-4 py-2.5 rounded-xl border flex items-center gap-3 transition ${
+                    sw.val === 1
+                      ? 'bg-emerald-600/30 border-emerald-500 text-white'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span className="font-bold font-mono">Сигнал {sw.name}:</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${sw.val === 1 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
+                    {sw.val} ({sw.val === 1 ? 'TRUE' : 'FALSE'})
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Live Operations Output Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center font-mono">
+                <span className="text-[10px] text-slate-400 block mb-1">A AND B</span>
+                <span className={`text-2xl font-bold ${andRes ? 'text-emerald-400' : 'text-slate-600'}`}>{andRes}</span>
+              </div>
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center font-mono">
+                <span className="text-[10px] text-slate-400 block mb-1">A OR B</span>
+                <span className={`text-2xl font-bold ${orRes ? 'text-cyan-400' : 'text-slate-600'}`}>{orRes}</span>
+              </div>
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center font-mono">
+                <span className="text-[10px] text-slate-400 block mb-1">A XOR B</span>
+                <span className={`text-2xl font-bold ${xorRes ? 'text-indigo-400' : 'text-slate-600'}`}>{xorRes}</span>
+              </div>
+              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center font-mono">
+                <span className="text-[10px] text-slate-400 block mb-1">(A ∧ ¬B) ∨ C</span>
+                <span className={`text-2xl font-bold ${customExpr ? 'text-amber-400' : 'text-slate-600'}`}>{customExpr}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-emerald-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-emerald-400">🎯</span> Тренажёр: Значение логического выражения
+                </h4>
+                <p className="text-xs text-slate-400">Вычисли значение функции при заданных переменных</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-emerald-400 hover:text-emerald-300 underline font-medium"
+              >
+                Другой пример ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200 mb-2">
+                Вычислите значение выражения: <code className="text-emerald-300 font-mono text-base font-bold bg-slate-950 px-2.5 py-1 rounded border border-slate-800">{quizQ.expr}</code>
+              </p>
+              <div className="text-xs font-mono text-slate-300 mt-2">
+                При значениях: <strong>A = {quizQ.vals.A}</strong>, <strong>B = {quizQ.vals.B}</strong>, <strong>C = {quizQ.vals.C}</strong>
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={() => handleQuizPick(1)}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-lg transition shadow-lg shadow-emerald-600/20"
+              >
+                1 (ИСТИНА)
+              </button>
+              <button
+                onClick={() => handleQuizPick(0)}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-lg transition"
+              >
+                0 (ЛОЖЬ)
+              </button>
+            </div>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 6: Binary Search (log2 N)
+    // =========================================================================
+    function BinarySearchSection({ onSolve }) {
+      const [maxN, setMaxN] = useState(1024);
+      const theoreticalSteps = Math.ceil(Math.log2(maxN));
+
+      // Interactive Game: Computer guesses user's number
+      const [low, setLow] = useState(1);
+      const [high, setHigh] = useState(100);
+      const [gameSteps, setGameSteps] = useState(1);
+      const [gameEnded, setGameEnded] = useState(false);
+
+      const mid = Math.floor((low + high) / 2);
+
+      const handleGameAnswer = (ans) => {
+        playSound('click');
+        if (ans === 'equal') {
+          playSound('success');
+          setGameEnded(true);
+        } else if (ans === 'higher') {
+          setLow(mid + 1);
+          setGameSteps(prev => prev + 1);
+        } else if (ans === 'lower') {
+          setHigh(mid - 1);
+          setGameSteps(prev => prev + 1);
+        }
+      };
+
+      const restartGame = () => {
+        playSound('click');
+        setLow(1);
+        setHigh(100);
+        setGameSteps(1);
+        setGameEnded(false);
+      };
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ n: 2000, ans: 11 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const ns = [50, 100, 256, 500, 1000, 2048, 5000];
+        const n = ns[Math.floor(Math.random() * ns.length)];
+        const ans = Math.ceil(Math.log2(n));
+        setQuizQ({ n, ans });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Точно! 2^${quizQ.ans-1} < ${quizQ.n} ≤ 2^${quizQ.ans}, нужно ${quizQ.ans} шагов. +10 баллов!` });
+          onSolve(5);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-sky-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-sky-500/20 rounded-lg text-sky-400">🔍</span>
+              Формула бинарного поиска (Деление пополам)
+            </h3>
+            <p className="text-sm text-slate-300 mb-2">
+              Каждым шагом мы отбрасываем ровно половину оставшихся элементов.
+              Максимальное количество сравнений для поиска в массиве из $N$ элементов равно:
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 font-mono text-sm text-sky-300">
+              K = ⌈log₂ N⌉, то есть наименьшее K такое, что <strong>2ᴷ ≥ N</strong>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3 text-center text-xs font-mono">
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹⁰ = 1024</div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹¹ = 2048</div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹² = 4096</div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹³ = 8192</div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹⁴ = 16384</div>
+              <div className="bg-slate-950 p-2 rounded border border-slate-800">2¹⁶ = 65536</div>
+            </div>
+          </div>
+
+          {/* Interactive Game Simulator */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex justify-between items-center mb-3">
+              <div>
+                <h4 className="font-bold text-white text-base">Интерактивная игра: Компьютер угадывает твоё число</h4>
+                <p className="text-xs text-slate-400">Загадай любое число от 1 до 100 в голове!</p>
+              </div>
+              <button
+                onClick={restartGame}
+                className="text-xs px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
+              >
+                Сначала ⟳
+              </button>
+            </div>
+
+            {!gameEnded ? (
+              <div className="bg-slate-950 p-6 rounded-xl border border-slate-800 text-center">
+                <span className="text-xs text-slate-400 block mb-1">Шаг алгоритма #{gameSteps} (Диапазон [{low} ... {high}]):</span>
+                <div className="text-3xl font-extrabold text-sky-400 font-mono my-3">
+                  Твое число: {mid}?
+                </div>
+                <div className="flex flex-wrap gap-2 justify-center mt-4">
+                  <button
+                    onClick={() => handleGameAnswer('lower')}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition"
+                  >
+                    Моё число МЕНЬШЕ ⬇
+                  </button>
+                  <button
+                    onClick={() => handleGameAnswer('equal')}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold transition shadow-lg shadow-emerald-600/30"
+                  >
+                    Угадал! 🎯
+                  </button>
+                  <button
+                    onClick={() => handleGameAnswer('higher')}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition"
+                  >
+                    Моё число БОЛЬШЕ ⬆
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-emerald-950/60 p-6 rounded-xl border border-emerald-500/40 text-center">
+                <span className="text-4xl block mb-2">🎉</span>
+                <h5 className="text-lg font-bold text-emerald-300">Число {mid} найдено всего за {gameSteps} шагов!</h5>
+                <p className="text-xs text-slate-300 mt-1">
+                  Так работает двоичный поиск — отсекает половину вариантов за каждый вопрос.
+                </p>
+                <button
+                  onClick={restartGame}
+                  className="mt-4 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold"
+                >
+                  Сыграть ещё раз
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-sky-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-sky-400">🎯</span> Тренажёр: Максимальное число сравнений
+                </h4>
+                <p className="text-xs text-slate-400">Олимпиадный тест на степени двойки</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-sky-400 hover:text-sky-300 underline font-medium"
+              >
+                Другие числа ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                В отсортированном массиве содержится ровно <strong className="text-sky-300 font-mono text-lg">{quizQ.n}</strong> элементов.
+                Какое максимальное число сравнений (шагов) потребуется сделать алгоритму бинарного поиска в худшем случае?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Число шагов..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-sky-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-sky-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 7: Bubble Sort & Inversions
+    // =========================================================================
+    function BubbleSortSection({ onSolve }) {
+      const initialArr = [8, 3, 6, 2, 7, 1];
+      const [arr, setArr] = useState([...initialArr]);
+      const [swaps, setSwaps] = useState(0);
+      const [activePair, setActivePair] = useState([-1, -1]);
+      const [isSorted, setIsSorted] = useState(false);
+
+      const shuffleArr = () => {
+        playSound('click');
+        const newArr = [7, 2, 9, 1, 5, 4].sort(() => Math.random() - 0.5);
+        setArr(newArr);
+        setSwaps(0);
+        setActivePair([-1, -1]);
+        setIsSorted(false);
+      };
+
+      const stepBubble = () => {
+        playSound('click');
+        const next = [...arr];
+        for (let i = 0; i < next.length - 1; i++) {
+          if (next[i] > next[i + 1]) {
+            setActivePair([i, i + 1]);
+            const tmp = next[i];
+            next[i] = next[i + 1];
+            next[i + 1] = tmp;
+            setArr(next);
+            setSwaps(s => s + 1);
+            return;
+          }
+        }
+        setIsSorted(true);
+        setActivePair([-1, -1]);
+      };
+
+      // Quiz: Count inversions
+      const [quizQ, setQuizQ] = useState({ arr: [5, 1, 4, 2, 8], ans: 4 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const presets = [
+          { a: [4, 3, 2, 1], ans: 6 },
+          { a: [5, 1, 4, 2], ans: 4 },
+          { a: [8, 3, 6, 2], ans: 5 },
+          { a: [2, 4, 1, 3], ans: 2 },
+          { a: [6, 5, 3, 1], ans: 6 }
+        ];
+        const q = presets[Math.floor(Math.random() * presets.length)];
+        setQuizQ({ arr: q.a, ans: q.ans });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Отлично! Число инверсий (обменов) действительно ${quizQ.ans}. +10 баллов!` });
+          onSolve(6);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-rose-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-rose-500/20 rounded-lg text-rose-400">📊</span>
+              Пузырьковая сортировка и подсчет инверсий
+            </h3>
+            <p className="text-sm text-slate-300 mb-2">
+              <strong>Инверсия</strong> — это пара элементов $(A[i], A[j])$, где $i < j$, но $A[i] > A[j]$ (то есть стоят не по порядку).
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 font-mono text-xs text-rose-300">
+              Количество обменов в пузырьковой сортировке в точности равно количеству инверсий в массиве!
+            </div>
+          </div>
+
+          {/* Interactive Bar Chart Visualizer */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base">Визуализатор обменов в массиве</h4>
+                <p className="text-xs text-slate-400">Нажимай «Шаг обмена» и смотри как элементы меняются местами</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={stepBubble}
+                  disabled={isSorted}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold transition"
+                >
+                  Шаг обмена ➜
+                </button>
+                <button
+                  onClick={shuffleArr}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition"
+                >
+                  Перемешать
+                </button>
+              </div>
+            </div>
+
+            {/* Bars */}
+            <div className="bg-slate-950 p-6 rounded-xl border border-slate-800 mb-4 h-48 flex items-end justify-center gap-3">
+              {arr.map((val, idx) => {
+                const isActive = activePair.includes(idx);
+                const heightPercent = (val / 10) * 100;
+                return (
+                  <div key={idx} className="flex flex-col items-center gap-1 w-12">
+                    <span className="text-xs font-mono font-bold text-slate-300">{val}</span>
+                    <div
+                      style={{ height: `${heightPercent}%` }}
+                      className={`w-full rounded-t-lg transition-all duration-300 ${
+                        isActive
+                          ? 'bg-amber-400 shadow-lg shadow-amber-400/40'
+                          : isSorted
+                          ? 'bg-emerald-500'
+                          : 'bg-indigo-600'
+                      }`}
+                    />
+                    <span className="text-[10px] text-slate-500 font-mono">[{idx}]</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center text-xs text-slate-400 font-mono">
+              <span>Совершено обменов: <strong className="text-rose-400 text-base">{swaps}</strong></span>
+              <span>{isSorted ? <span className="text-emerald-400 font-bold">✓ Массив полностью отсортирован!</span> : 'Сортировка продолжается...'}</span>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-rose-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-rose-400">🎯</span> Тренажёр: Подсчёт количества обменов
+                </h4>
+                <p className="text-xs text-slate-400">Сколько обменов нужно сделать алгоритму?</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-rose-400 hover:text-rose-300 underline font-medium"
+              >
+                Другой массив ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Дан массив: <strong className="text-rose-300 text-lg font-mono">[{quizQ.arr.join(', ')}]</strong>.
+                Сколько всего обменов соседних элементов совершит пузырьковая сортировка до полного упорядочивания массива по возрастанию?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Число обменов..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-rose-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-rose-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 8: Recursive Functions
+    // =========================================================================
+    function RecursionSection({ onSolve }) {
+      const [nVal, setNVal] = useState(5);
+
+      // F(n) = n + F(n-1), F(1) = 1
+      const stack = useMemo(() => {
+        const arr = [];
+        let cur = 0;
+        for (let i = 1; i <= nVal; i++) {
+          cur = i + (i === 1 ? 0 : cur);
+          arr.push({ n: i, expr: i === 1 ? '1' : `${i} + F(${i-1})`, val: cur });
+        }
+        return arr;
+      }, [nVal]);
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ n: 6, ans: 21 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const ns = [4, 5, 6, 7, 8];
+        const n = ns[Math.floor(Math.random() * ns.length)];
+        const ans = (n * (n + 1)) / 2;
+        setQuizQ({ n, ans });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Великолепно! F(${quizQ.n}) = ${quizQ.ans}. +10 баллов!` });
+          onSolve(7);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-teal-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-teal-500/20 rounded-lg text-teal-400">🔄</span>
+              Рекурсивные соотношения: Метод снизу вверх
+            </h3>
+            <p className="text-sm text-slate-300 mb-2">
+              Не раскрывайте гигантское дерево вызовов сверху вниз! Вместо этого считайте значения по порядку, начиная с базы:
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 font-mono text-xs text-teal-300">
+              База: F(1) = 1 → F(2) = 2 + F(1) = 3 → F(3) = 3 + F(2) = 6 → F(4) = 4 + 6 = 10...
+            </div>
+          </div>
+
+          {/* Interactive Stack Visualizer */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base">Трассировщик рекурсии: F(n) = n + F(n-1)</h4>
+                <p className="text-xs text-slate-400">Задай N и посмотри пошаговый стек вычислений</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">N:</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="12"
+                  value={nVal}
+                  onChange={(e) => setNVal(Math.max(1, Math.min(12, parseInt(e.target.value) || 1)))}
+                  className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-white text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {stack.map((item) => (
+                <div key={item.n} className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800 font-mono text-sm">
+                  <span className="text-teal-400 font-bold">F({item.n})</span>
+                  <span className="text-slate-400 text-xs">= {item.expr}</span>
+                  <span className="text-emerald-400 font-bold">➜ {item.val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-teal-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-teal-400">🎯</span> Тренажёр: Вычисление F(n)
+                </h4>
+                <p className="text-xs text-slate-400">Реши задачу на рекуррентное выражение</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-teal-400 hover:text-teal-300 underline font-medium"
+              >
+                Другой вариант ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Задана функция:<br/>
+                <code className="text-teal-300 font-mono">F(1) = 1;</code><br/>
+                <code className="text-teal-300 font-mono">F(n) = n + F(n - 1) при n &gt; 1;</code><br/>
+                Чему равно значение <strong className="text-white text-base font-mono">F({quizQ.n})</strong>?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Значение F(n)..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-teal-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-teal-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 9: Combinatorics & Password Codes
+    // =========================================================================
+    function CombinatoricsSection({ onSolve }) {
+      const [alphabetSize, setAlphabetSize] = useState(36);
+      const [length, setLength] = useState(4);
+
+      const totalVariants = Math.pow(alphabetSize, length);
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ k: 10, l: 4, ans: 10000 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const tests = [
+          { k: 10, l: 3, ans: 1000 },
+          { k: 10, l: 4, ans: 10000 },
+          { k: 26, l: 2, ans: 676 },
+          { k: 16, l: 3, ans: 4096 },
+          { k: 8, l: 4, ans: 4096 },
+          { k: 5, l: 4, ans: 625 }
+        ];
+        const t = tests[Math.floor(Math.random() * tests.length)];
+        setQuizQ(t);
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Точно! ${quizQ.k}^${quizQ.l} = ${quizQ.ans} вариантов. +10 баллов!` });
+          onSolve(8);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильный ответ: ${quizQ.ans}` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-fuchsia-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-fuchsia-500/20 rounded-lg text-fuchsia-400">🔑</span>
+              Формула комбинаторики паролей
+            </h3>
+            <p className="text-sm text-slate-300 mb-2">
+              Если пароль состоит из $L$ символов, и каждый символ выбирается из алфавита мощностью $K$ вариантов:
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 font-mono text-sm text-fuchsia-300 font-bold">
+              Всего комбинаций = Kᴸ (Количество вариантов в степени длины)
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              Пример: 10 цифр (0-9), длина 4 знака (PIN-код) → 10⁴ = 10 000 вариантов.
+            </p>
+          </div>
+
+          {/* Interactive Password Space Calculator */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h4 className="font-bold text-white text-base mb-4">Интерактивный конфигуратор пароля</h4>
+            <div className="grid sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Мощность алфавита (K вариантов):</label>
+                <input
+                  type="number"
+                  min="2"
+                  max="100"
+                  value={alphabetSize}
+                  onChange={(e) => setAlphabetSize(Math.max(2, parseInt(e.target.value) || 2))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 font-mono text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 block mb-1">Длина пароля (L знаков):</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="8"
+                  value={length}
+                  onChange={(e) => setLength(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 font-mono text-white text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-center">
+              <span className="text-xs text-slate-400 block mb-1">Формула: {alphabetSize}^{length} =</span>
+              <span className="text-3xl font-extrabold text-fuchsia-400 block">{totalVariants.toLocaleString()}</span>
+              <span className="text-xs text-slate-500 mt-1 block">возможных уникальных паролей</span>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-fuchsia-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-fuchsia-400">🎯</span> Тренажёр: Количество кодов
+                </h4>
+                <p className="text-xs text-slate-400">Олимпиадная задача на формулу K^L</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-fuchsia-400 hover:text-fuchsia-300 underline font-medium"
+              >
+                Другие числа ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                Секретный замок открывается кодом длиной <strong className="text-fuchsia-300 font-mono">{quizQ.l}</strong> символа.
+                Каждая позиция может содержать один из <strong className="text-fuchsia-300 font-mono">{quizQ.k}</strong> возможных символов (с повторениями).
+                Сколько всего различных кодовых комбинаций можно составить?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Количество комбинаций..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-fuchsia-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 10: RLE Compression
+    // =========================================================================
+    function RleSection({ onSolve }) {
+      const [inputStr, setInputStr] = useState("AAAAAABBBCCCCCDD");
+
+      const compressed = useMemo(() => {
+        if (!inputStr) return "";
+        let res = "";
+        let count = 1;
+        for (let i = 0; i < inputStr.length; i++) {
+          if (inputStr[i] === inputStr[i + 1]) {
+            count++;
+          } else {
+            res += inputStr[i] + count;
+            count = 1;
+          }
+        }
+        return res;
+      }, [inputStr]);
+
+      const ratio = inputStr.length > 0 ? ((compressed.length / inputStr.length) * 100).toFixed(1) : 0;
+
+      // Quiz
+      const [quizQ, setQuizQ] = useState({ str: "WWWWWWBBWWWW", ans: "W6B2W4", len: 6 });
+      const [userAns, setUserAns] = useState("");
+      const [quizResult, setQuizResult] = useState(null);
+
+      const generateQuiz = () => {
+        const tests = [
+          { s: "AAAAAABBBCC", a: "A6B3C2", l: 6 },
+          { s: "WWWWWWBBWWWW", a: "W6B2W4", l: 6 },
+          { s: "XXXXYYYYZZZZ", a: "X4Y4Z4", l: 6 },
+          { s: "MMMMMMMMDDDD", a: "M8D4", l: 4 }
+        ];
+        const t = tests[Math.floor(Math.random() * tests.length)];
+        setQuizQ({ str: t.s, ans: t.a, len: t.l });
+        setUserAns("");
+        setQuizResult(null);
+      };
+
+      const checkQuiz = (e) => {
+        e.preventDefault();
+        if (parseInt(userAns) === quizQ.len || userAns.toUpperCase().trim() === quizQ.ans) {
+          playSound('success');
+          setQuizResult({ ok: true, msg: `Правильно! Сжатая строка: ${quizQ.ans} (длина: ${quizQ.len} байт). +10 баллов!` });
+          onSolve(9);
+        } else {
+          playSound('error');
+          setQuizResult({ ok: false, msg: `Неверно. Правильная сжатая строка: ${quizQ.ans} (длина ${quizQ.len} символов).` });
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Rules Banner */}
+          <div className="glass-panel p-5 rounded-2xl border-l-4 border-yellow-500">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="p-1.5 bg-yellow-500/20 rounded-lg text-yellow-400">📦</span>
+              Правило RLE (Run-Length Encoding)
+            </h3>
+            <p className="text-sm text-slate-300 mb-2">
+              Серии одинаковых подряд идущих символов заменяются на пару: <strong>Символ + Число повторений</strong>.
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-700/60 font-mono text-xs text-yellow-300">
+              Пример: AAAAAABBBCC (11 символов) → A6B3C2 (6 символов: A, 6, B, 3, C, 2). Каждый символ весит ровно 1 байт.
+            </div>
+          </div>
+
+          {/* Interactive RLE Encoder */}
+          <div className="glass-panel p-6 rounded-2xl">
+            <h4 className="font-bold text-white text-base mb-2">Интерактивный RLE-кодировщик строк</h4>
+            <div className="mb-4">
+              <label className="text-xs text-slate-400 block mb-1">Исходная строка для сжатия:</label>
+              <input
+                type="text"
+                value={inputStr}
+                onChange={(e) => setInputStr(e.target.value.toUpperCase())}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 font-mono text-white text-sm uppercase"
+              />
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono space-y-3">
+              <div className="flex justify-between items-center text-sm border-b border-slate-800/80 pb-2">
+                <span className="text-slate-400">Сжатый результат:</span>
+                <span className="text-emerald-400 font-bold text-base">{compressed}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <span className="text-slate-500 block">До сжатия</span>
+                  <strong className="text-white text-sm">{inputStr.length} байт</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">После сжатия</span>
+                  <strong className="text-yellow-400 text-sm">{compressed.length} байт</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block">Сжатие</span>
+                  <strong className="text-cyan-400 text-sm">{ratio}%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Practice Quiz */}
+          <div className="glass-panel p-6 rounded-2xl border border-yellow-500/30">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-white text-base flex items-center gap-2">
+                  <span className="text-yellow-400">🎯</span> Тренажёр: Длина сжатой строки
+                </h4>
+                <p className="text-xs text-slate-400">Сколько байт займет строка после сжатия?</p>
+              </div>
+              <button
+                onClick={generateQuiz}
+                className="text-xs text-yellow-400 hover:text-yellow-300 underline font-medium"
+              >
+                Другая строка ⟳
+              </button>
+            </div>
+
+            <div className="bg-slate-900/90 p-4 rounded-xl border border-slate-800 mb-4">
+              <p className="text-sm text-slate-200">
+                К строке <strong className="text-yellow-300 font-mono text-base">{quizQ.str}</strong> применили алгоритм RLE.
+                Какова длина получившейся сжатой строки в символах (байтах)?
+              </p>
+            </div>
+
+            <form onSubmit={checkQuiz} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                placeholder="Длина (байт)..."
+                value={userAns}
+                onChange={(e) => setUserAns(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-yellow-500 focus:outline-none w-48"
+              />
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-yellow-600 hover:bg-yellow-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-yellow-600/30"
+              >
+                Проверить ответ
+              </button>
+            </form>
+
+            {quizResult && (
+              <div className={`mt-4 p-3.5 rounded-xl border text-sm font-medium ${quizResult.ok ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/60 border-rose-500/40 text-rose-300'}`}>
+                {quizResult.msg}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // SECTION 11: 100-Point Blitz Exam (Final Olympiad Simulator)
+    // =========================================================================
+    function BlitzExamSection({ onExamCompleted }) {
+      const EXAM_QUESTIONS = [
+        {
+          id: 1,
+          topic: "Алгоритм шагов (3x+1)",
+          q: "Число x = 27. Чему равно число после ровно 6 шагов алгоритма Коллатца?",
+          ans: "107",
+          hint: "27 -> 82 -> 41 -> 124 -> 62 -> 31 -> 107 (6 шагов)"
+        },
+        {
+          id: 2,
+          topic: "Системы счисления",
+          q: "Переведите шестнадцатеричное число 4D2₁₆ в десятичную систему счисления:",
+          ans: "1234",
+          hint: "4×256 + 13×16 + 2×1 = 1024 + 208 + 2 = 1234"
+        },
+        {
+          id: 3,
+          topic: "Объем графики",
+          q: "Изображение 1024×512 пикселей имеет палитру из 256 цветов (8 бит = 1 байт). Найдите объем файла в Кбайтах:",
+          ans: "512",
+          hint: "(1024 × 512 × 1 байт) / 1024 = 512 КБайт"
+        },
+        {
+          id: 4,
+          topic: "Сети и кабели",
+          q: "В полносвязной сети каждый компьютер соединен со всеми остальными. Сколько кабелей нужно для 14 компьютеров?",
+          ans: "91",
+          hint: "(14 × 13) / 2 = 91 кабель"
+        },
+        {
+          id: 5,
+          topic: "Алгебра логики",
+          q: "Чему равно значение логического выражения (1 AND 0) OR (NOT 0 AND 1)? Введите 0 или 1:",
+          ans: "1",
+          hint: "(0) OR (1 AND 1) = 0 OR 1 = 1"
+        },
+        {
+          id: 6,
+          topic: "Бинарный поиск",
+          q: "Какое максимальное число шагов бинарного поиска нужно для нахождения элемента в массиве из 1024 чисел?",
+          ans: "10",
+          hint: "2¹⁰ = 1024, поэтому ровно 10 шагов"
+        },
+        {
+          id: 7,
+          topic: "Пузырьковая сортировка",
+          q: "Сколько обменов совершит сортировка пузырьком для массива [8, 3, 6, 2]?",
+          ans: "5",
+          hint: "Инверсии: (8,3), (8,6), (8,2), (3,2), (6,2) = 5 обменов"
+        },
+        {
+          id: 8,
+          topic: "Рекурсия",
+          q: "Дано: F(1)=1, F(n) = n + F(n-1). Найдите значение F(6):",
+          ans: "21",
+          hint: "1 + 2 + 3 + 4 + 5 + 6 = 21"
+        },
+        {
+          id: 9,
+          topic: "Комбинаторика паролей",
+          q: "Пароль длины 4 составляется из алфавита в 10 цифр. Сколько всего комбинаций паролей существует?",
+          ans: "10000",
+          hint: "10⁴ = 10 000 вариантов"
+        },
+        {
+          id: 10,
+          topic: "RLE-сжатие",
+          q: "Строку AAAAAABBBCC сжали алгоритмом RLE (A6B3C2). Сколько символов (байт) содержит сжатая строка?",
+          ans: "6",
+          hint: "'A','6','B','3','C','2' = ровно 6 символов"
+        }
+      ];
+
+      const [answers, setAnswers] = useState({});
+      const [submitted, setSubmitted] = useState(false);
+      const [score, setScore] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(900); // 15 min timer
+      const [isTimerActive, setIsTimerActive] = useState(true);
+
+      useEffect(() => {
+        let t;
+        if (isTimerActive && timeLeft > 0 && !submitted) {
+          t = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+        }
+        return () => clearInterval(t);
+      }, [isTimerActive, timeLeft, submitted]);
+
+      const formatTime = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      };
+
+      const handleInput = (qid, val) => {
+        setAnswers(prev => ({ ...prev, [qid]: val.trim() }));
+      };
+
+      const handleSubmit = () => {
+        playSound('click');
+        let total = 0;
+        EXAM_QUESTIONS.forEach(q => {
+          if ((answers[q.id] || "").toLowerCase() === q.ans.toLowerCase()) {
+            total += 10;
+          }
+        });
+        setScore(total);
+        setSubmitted(true);
+        setIsTimerActive(false);
+
+        if (total >= 80) {
+          playSound('success');
+          try {
+            confetti({
+              particleCount: 120,
+              spread: 70,
+              origin: { y: 0.6 }
+            });
+          } catch(e) {}
+        } else {
+          playSound('error');
+        }
+
+        onExamCompleted(total);
+      };
+
+      const resetExam = () => {
+        playSound('click');
+        setAnswers({});
+        setSubmitted(false);
+        setScore(0);
+        setTimeLeft(900);
+        setIsTimerActive(true);
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Header Bar */}
+          <div className="glass-panel p-6 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border border-indigo-500/40">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  Олимпиада 2026
+                </span>
+                <h3 className="text-xl font-extrabold text-white">Республиканский Блиц-Экзамен</h3>
+              </div>
+              <p className="text-xs text-slate-400">10 задач по 10 баллов каждая. Максимальный результат: 100 баллов!</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-center font-mono">
+                <span className="text-[10px] text-slate-400 block uppercase">Время</span>
+                <span className={`text-lg font-bold ${timeLeft < 180 ? 'text-rose-400 animate-pulse' : 'text-indigo-400'}`}>
+                  {formatTime(timeLeft)}
+                </span>
+              </div>
+              {submitted && (
+                <button
+                  onClick={resetExam}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Сдать заново ⟳
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Results Card if Submitted */}
+          {submitted && (
+            <div className="glass-panel p-6 rounded-2xl text-center border-2 border-indigo-500 glow-indigo">
+              <span className="text-5xl block mb-2">{score >= 80 ? '🥇' : score >= 50 ? '🥈' : '🥉'}</span>
+              <h4 className="text-2xl font-black text-white mb-1">Твой результат: {score} из 100 баллов!</h4>
+              <p className="text-sm text-slate-300 max-w-md mx-auto">
+                {score === 100
+                  ? 'Невероятно! Абсолютный победитель! Ты готов занять первое место на олимпиаде!'
+                  : score >= 80
+                  ? 'Отличный результат! У тебя прекрасные шансы на диплом победителя!'
+                  : 'Хорошая попытка! Повтори разделы, где возникли ошибки, и попробуй снова!'}
+              </p>
+            </div>
+          )}
+
+          {/* Questions List */}
+          <div className="space-y-4">
+            {EXAM_QUESTIONS.map((q, idx) => {
+              const isCorrect = submitted && (answers[q.id] || "").toLowerCase() === q.ans.toLowerCase();
+              return (
+                <div
+                  key={q.id}
+                  className={`glass-panel p-5 rounded-2xl border transition ${
+                    submitted
+                      ? isCorrect
+                        ? 'border-emerald-500/50 bg-emerald-950/20'
+                        : 'border-rose-500/50 bg-rose-950/20'
+                      : 'border-slate-800'
+                  }`}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-indigo-400 font-mono">
+                      Задание #{idx + 1} • {q.topic} (10 баллов)
+                    </span>
+                    {submitted && (
+                      <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isCorrect ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                        {isCorrect ? '+10 баллов' : '0 баллов'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-200 mb-3">{q.q}</p>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      type="text"
+                      disabled={submitted}
+                      placeholder="Ответ..."
+                      value={answers[q.id] || ""}
+                      onChange={(e) => handleInput(q.id, e.target.value)}
+                      className={`bg-slate-900 border rounded-xl px-4 py-2 font-mono text-sm focus:outline-none w-48 ${
+                        submitted
+                          ? isCorrect
+                            ? 'border-emerald-500 text-emerald-300 font-bold'
+                            : 'border-rose-500 text-rose-300 font-bold'
+                          : 'border-slate-700 text-white focus:border-indigo-500'
+                      }`}
+                    />
+                    {submitted && !isCorrect && (
+                      <div className="text-xs text-rose-400">
+                        Правильный ответ: <strong className="font-mono text-white">{q.ans}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {submitted && (
+                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 text-xs text-slate-400">
+                      💡 <strong>Разбор:</strong> {q.hint}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Submit Button */}
+          {!submitted && (
+            <div className="text-center pt-2">
+              <button
+                onClick={handleSubmit}
+                className="px-8 py-3.5 bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-extrabold rounded-2xl text-base transition shadow-xl shadow-indigo-600/30 transform hover:-translate-y-0.5"
+              >
+                Завершить экзамен и проверить результат 🚀
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =========================================================================
+    // MAIN APP COMPONENT
+    // =========================================================================
+    function App() {
+      const [tab, setTab] = useState(0);
+      const [lang, setLang] = useState('ru'); // 'ru' or 'tj'
+      const [solvedTopics, setSolvedTopics] = useState({});
+      const [examBestScore, setExamBestScore] = useState(0);
+      const [showCheatModal, setShowCheatModal] = useState(false);
+
+      // Load saved progress from localStorage
+      useEffect(() => {
+        try {
+          const savedSolved = localStorage.getItem('olimp_solved');
+          if (savedSolved) setSolvedTopics(JSON.parse(savedSolved));
+          const savedScore = localStorage.getItem('olimp_exam_score');
+          if (savedScore) setExamBestScore(parseInt(savedScore) || 0);
+        } catch(e) {}
+      }, []);
+
+      const markSolved = (topicId) => {
+        setSolvedTopics(prev => {
+          const next = { ...prev, [topicId]: true };
+          try { localStorage.setItem('olimp_solved', JSON.stringify(next)); } catch(e) {}
+          return next;
+        });
+      };
+
+      const handleExamDone = (score) => {
+        if (score > examBestScore) {
+          setExamBestScore(score);
+          try { localStorage.setItem('olimp_exam_score', score.toString()); } catch(e) {}
+        }
+      };
+
+      const solvedCount = Object.keys(solvedTopics).length;
+
+      return (
+        <div className="min-h-screen pb-16">
+          {/* Top Navbar */}
+          <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-md border-b border-slate-800">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/25">
+                  ⚡
+                </div>
+                <div>
+                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+                    Олимпиада Информатика <span className="text-xs font-normal text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">Таджикистан</span>
+                  </h1>
+                  <p className="text-[11px] text-slate-400 hidden sm:block">Интерактивный тренажёр и база знаний ко всем 10 разделам</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Stats Chips */}
+                <div className="hidden md:flex items-center gap-2 text-xs font-mono">
+                  <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-emerald-400">
+                    🏆 Решено: <strong>{solvedCount}/10</strong>
+                  </div>
+                  {examBestScore > 0 && (
+                    <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-amber-400">
+                      ⭐ Рекорд: <strong>{examBestScore}/100</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Cheat Sheet Button */}
+                <button
+                  onClick={() => { playSound('click'); setShowCheatModal(true); }}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
+                >
+                  <span>📋</span>
+                  <span className="hidden sm:inline">Шпаргалка</span>
+                </button>
+
+                {/* Language Toggle */}
+                <button
+                  onClick={() => { playSound('click'); setLang(lang === 'ru' ? 'tj' : 'ru'); }}
+                  className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-bold rounded-lg transition"
+                >
+                  {lang === 'ru' ? '🇹🇯 TJ' : '🇷🇺 RU'}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Hero & Topic Tabs */}
+          <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+            {/* Quick Hero Banner */}
+            <div className="mb-6 p-6 rounded-3xl bg-gradient-to-r from-indigo-950/60 via-slate-900/60 to-slate-950/80 border border-indigo-500/20 relative overflow-hidden">
+              <div className="absolute -right-12 -top-12 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+                    {lang === 'ru' ? '🚀 Полная подготовка к республиканской олимпиаде' : '🚀 Омодагии пурра ба олимпиадаи ҷумҳуриявӣ'}
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black text-white">
+                    {lang === 'ru' ? 'Тренажёр и калькулятор по всем 10 темам' : 'Тренажёр ва ҳисобкунак барои ҳамаи 10 мавзӯъ'}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
+                    Выбирай нужную тему ниже: читай шпаргалку с формулами, экспериментируй в интерактивном симуляторе и решай практические задачи.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { playSound('click'); setTab(10); }}
+                  className="self-start md:self-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold rounded-xl transition shadow-lg shadow-indigo-600/30 flex items-center gap-2"
+                >
+                  <span>🔥 Сдать Блиц-Экзамен (100 б.)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Topic Navigation Tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-3 custom-scroll mb-6">
+              {SECTIONS.map((s, idx) => {
+                const isActive = tab === idx;
+                const isSolved = solvedTopics[s.id];
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => { playSound('click'); setTab(idx); }}
+                    className={`flex-shrink-0 px-4 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/25'
+                        : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono font-bold ${isActive ? 'bg-white text-indigo-900' : 'bg-slate-800 text-slate-300'}`}>
+                      {s.num}
+                    </span>
+                    <span>{lang === 'ru' ? s.title : s.titleTj}</span>
+                    {isSolved && <span className="text-emerald-400 text-xs">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Section Header */}
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-mono font-semibold text-indigo-400 uppercase tracking-wider">
+                  Раздел {SECTIONS[tab].num} из 11 • {SECTIONS[tab].badge}
+                </span>
+                <h2 className="text-2xl font-black text-white">
+                  {lang === 'ru' ? SECTIONS[tab].title : SECTIONS[tab].titleTj}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-400">{SECTIONS[tab].desc}</p>
+              </div>
+            </div>
+
+            {/* Dynamic Active Tab Content */}
+            <div className="transition-all duration-200">
+              {tab === 0 && <CollatzSection onSolve={markSolved} />}
+              {tab === 1 && <NumberSystemsSection onSolve={markSolved} />}
+              {tab === 2 && <VolumeSection onSolve={markSolved} />}
+              {tab === 3 && <NetworkSection onSolve={markSolved} />}
+              {tab === 4 && <LogicSection onSolve={markSolved} />}
+              {tab === 5 && <BinarySearchSection onSolve={markSolved} />}
+              {tab === 6 && <BubbleSortSection onSolve={markSolved} />}
+              {tab === 7 && <RecursionSection onSolve={markSolved} />}
+              {tab === 8 && <CombinatoricsSection onSolve={markSolved} />}
+              {tab === 9 && <RleSection onSolve={markSolved} />}
+              {tab === 10 && <BlitzExamSection onExamCompleted={handleExamDone} />}
+            </div>
+          </main>
+
+          {/* Quick Cheat Sheet Modal */}
+          {showCheatModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto custom-scroll p-6 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    📋 Главная шпаргалка формул к олимпиаде
+                  </h3>
+                  <button
+                    onClick={() => setShowCheatModal(false)}
+                    className="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-3 text-xs font-mono">
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-indigo-400 block mb-1">1. Шаги Коллатца:</strong>
+                    Четное: x / 2. Нечетное: 3x + 1.
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-cyan-400 block mb-1">2. Системы счисления:</strong>
+                    2-ичная: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024.<br/>
+                    16-ричная: 1, 16, 256. A=10, B=11, C=12, D=13, E=14, F=15.
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-amber-400 block mb-1">3. Объем текста и графики:</strong>
+                    Текст: I = K × i (1 байт = 8 бит). Картинка: V = W × H × i бит. 1 КБ = 1024 Б.
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-violet-400 block mb-1">4. Кабели в сети:</strong>
+                    C = N × (N - 1) / 2. Для 14 компов: (14×13)/2 = 91 кабель.
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-emerald-400 block mb-1">5. Логика:</strong>
+                    AND — умножение. OR — сложение. NOT — инверсия.
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-sky-400 block mb-1">6. Бинарный поиск:</strong>
+                    Число сравнений K = ⌈log₂ N⌉ (наименьшее 2ᴷ ≥ N).
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-rose-400 block mb-1">7. Пузырьковая сортировка:</strong>
+                    Число обменов = количество инверсий (пар A[i] &gt; A[j] при i &lt; j).
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-teal-400 block mb-1">8. Рекурсия:</strong>
+                    Считайте снизу вверх: F(1), затем F(2), F(3)...
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-fuchsia-400 block mb-1">9. Пароли:</strong>
+                    Варианты = Kᴸ (мощность алфавита в степени длины).
+                  </div>
+                  <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <strong className="text-yellow-400 block mb-1">10. RLE-сжатие:</strong>
+                    AAAAAABBBCC → A6B3C2 (каждый символ и цифра = 1 байт).
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Mount to DOM
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
